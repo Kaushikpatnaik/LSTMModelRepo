@@ -74,14 +74,15 @@ def train_test_split(data, ratio =[0.6,0.2,0.2]):
   :param ratio: a list containing ratio's for train, test and split
   :return: train_data, valid_data and test_data
   '''
-  [train_index, valid_index, test_index] = ratio * len(data)
+
+  [train_index, valid_index, test_index] = [int(x*len(data)) for x in ratio]
   train_data = data[:train_index]
   valid_data = data[train_index:train_index+valid_index]
   test_data = data[len(data)-valid_index:]
 
   return (train_data,valid_data,test_data)
 
-class batch_generator(object):
+class BatchGenerator(object):
   '''
   Given a source of data, generate batches with [batch_size, batch_len]
   :param data: data given as a single string of characters. Can be train, test or validation
@@ -96,6 +97,7 @@ class batch_generator(object):
     self.batch_len = batch_len
     self.segment_len = len(data)//batch_size
     self.vocab_len = 27
+    self.vocab = 'abcdefghijklmnopqrstuvwxyz'
     self.cursor = [offset*self.segment_len for offset in range(batch_size)]
     self.last_batch = self._next_batch()
 
@@ -107,9 +109,8 @@ class batch_generator(object):
   def _next_batch(self):
     batch = np.zeros((self.batch_size,self.vocab_len))
     for i in range(self.batch_size):
-      batch[i,char2id(data[self.cursor[i]])] = 1.0
-      # google divides by text_len which is correct ?
-      self.cursor[i] = (self.cursor[i]+1) % self.segment_len
+      batch[i,char2id(data[self.cursor[i]],self.vocab)] = 1.0
+      self.cursor[i] = (self.cursor[i]+1) % len(self.data)
     return batch
 
   def next(self):
@@ -119,6 +120,38 @@ class batch_generator(object):
     self.last_batch = batches[-1]
     return batches
 
+def batch2String(batch_data):
+  '''
+  Given a single batch of data, convert it back to string using the underlying functions
+  :param batch_data:
+  :return:
+
+  :details:
+  The initial level of the batch is a list of len: batch_len
+  the next level is an array of type batch_size * vocab_len
+  each row of that array needs to be converted back to a character
+  the characters need to be appended by batch_len first, different rows
+  of the batches should be different strings
+  '''
+
+  batch_len = len(batch_data)
+  row, col = batch_data[0].shape
+  row_ptr = 0
+  vocab = 'abcdefghijklmnopqrstuvwxyz'
+  batch_string = []
+
+  while row_ptr < row:
+    string = ''
+    for i in range(batch_len):
+      data = batch_data[i][row_ptr]
+      idx = np.argmax(data)
+      char = id2char(idx,vocab)
+      string += char
+    batch_string.append(string)
+    row_ptr += 1
+
+  return batch_string
+
 if __name__ == "__main__":
 
   url = 'http://mattmahoney.net/dc/'
@@ -127,6 +160,14 @@ if __name__ == "__main__":
   data = download_data(url,filename)
 
   print data[:100]
+
+  train, val ,test = train_test_split(data)
+
+  batch_train = BatchGenerator(train,64,20)
+
+  # Testing that we are getting batches of appropriate size and shape
+  print batch2String(batch_train.next())
+
 
 
 
