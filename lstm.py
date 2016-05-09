@@ -69,18 +69,18 @@ class LSTM(object):
           biasW = tf.get_variable('biasW',shape=[self.hidden_layers])
           ip2hidden = tf.matmul(input_data,ip2hiddenW) + biasW
           hidden2hidden = tf.matmul(h,hidden2hiddenW)+ biasW
-        return ip2hidden + hidden2hidden
+          return ip2hidden + hidden2hidden
 
       ip_gate = sum_inputs(input_data,h,'input_gate')
       ip_transform = sum_inputs(input_data,h,'input_transform')
       forget_gate = sum_inputs(input_data,h,'forget_gate')
       output_gate = sum_inputs(input_data,h,'output_gate')
 
-      # TODO: Kaushik Add dropout to the final layer
+      # TODO: Kaushik Add dropout to the output
       new_c = c*tf.sigmoid(forget_gate + self.offset_bias) + tf.sigmoid(ip_transform)*tf.tanh(ip_gate)
       new_h = tf.tanh(new_c)*tf.sigmoid(output_gate)
 
-    return new_h, tf.array_ops.concat(1,[new_c,new_h])
+      return new_h, tf.array_ops.concat(1,[new_c,new_h])
 
 class DeepLSTM(object):
   '''A DeepLSTM unit composed of multiple LSTM units'''
@@ -113,7 +113,24 @@ class DeepLSTM(object):
           # hidden unit is propagated as the input_data
           curr_input, new_state = cell(curr_input,curr_state)
           new_states.append(new_state)
-    return curr_input, tf.array_ops.concat(1,new_states)
+      return curr_input, tf.array_ops.concat(1,new_states)
+
+# TODO: Kaushik handle sequences of different lengths
+def fixed_time_steps_LSTM(cell, inputs, initial_state = None, scope = None):
+  '''Run a LSTM or DeepLSTM for multiple time steps (prefixed), by including loss function and optimization'''
+
+  with tf.variable_scope(scope or "RNN"):
+    if initial_state is not None:
+      state = initial_state
+
+    for time, input in enumerate(inputs):
+      if time > 0: tf.get_variable_scope().reuse_variables()
+
+      output, state = cell(input, state)
+
+    return (output, state)
+
+
 
 
 
