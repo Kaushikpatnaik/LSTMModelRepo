@@ -43,30 +43,6 @@ def download_data(url, filename):
     return tf.compat.as_str(f.read(name))
   f.close()
 
-def char2id(char,vocab):
-  '''
-  based on vocab, convert characters to numbers
-  :param char: character to be converted
-  :param vocab: list of characters used as vocabulary
-  :return: id for the character
-  '''
-  if char in vocab:
-    return vocab.index(char) + 1
-  else:
-    return 0
-
-def id2char(id,vocab):
-  '''
-  based on integer id return the character
-  :param id:
-  :param vocab:
-  :return:
-  '''
-  if id > 0:
-    return vocab[id-1]
-  else:
-    return ' '
-
 def train_test_split(data, ratio =[0.6,0.2,0.2]):
   '''
   Based on ratio, splits the data into train, validation and testing steps
@@ -95,62 +71,36 @@ class BatchGenerator(object):
     self.data = data
     self.batch_size = batch_size
     self.batch_len = batch_len
-    self.segment_len = len(data)//batch_size
-    self.vocab_len = 27
-    self.vocab = 'abcdefghijklmnopqrstuvwxyz'
-    self.cursor = [offset*self.segment_len for offset in range(batch_size)]
-    self.last_batch = self._next_batch()
+    self.cursor = 0
+    self.segment_len = len(self.data)//self.batch_size
+    self.batch = np.zeros((self.batch_size,self.segment_len), dtype=np.int32)
+    self.epoch_size = (self.segment_len - 1) // self.batch_len
 
-  # contiguous data should be part of a single batch_len
-  # the way to ensure that is to divide the data into segments based on batch_len
-  # with segments capturing continuous information
-  # and to move along the segments taking consequtive chunks
+  def preprocess(self):
+    counter = collections.Counter(self.data)
+    count_pairs = sorted(counter.items(), key=lambda x: -x[1])
 
-  def _next_batch(self):
-    batch = np.zeros((self.batch_size,self.vocab_len))
+    self.chars, _ = zip(*count_pairs)
+    self.vocab_size = len(self.chars)
+    self.vocab = dict(zip(self.chars, range(self.vocab_size)))
+    tensor = np.array(list(map(self.vocab.get, self.data)))
+    return tensor
+
+  def create_batches(self):
+    # contiguous data should be part of a single batch_len
+    # the way to ensure that is to divide the data into segments based on batch_len
+    # with segments capturing continuous information
+    # and to move along the segments taking consequtive chunks
+
+    tensor = self.preprocess()
     for i in range(self.batch_size):
-      batch[i,char2id(data[self.cursor[i]],self.vocab)] = 1.0
-      self.cursor[i] = (self.cursor[i]+1) % len(self.data)
-    return batch
+      self.batch[i] = tensor[self.segment_len*i:self.segment_len*(i+1)]
 
   def next(self):
-    batches = [self.last_batch]
-    for step in range(self.batch_len):
-      batches.append(self._next_batch())
-    self.last_batch = batches[-1]
-    return batches
-
-def batch2String(batch_data):
-  '''
-  Given a single batch of data, convert it back to string using the underlying functions
-  :param batch_data:
-  :return:
-
-  :details:
-  The initial level of the batch is a list of len: batch_len
-  the next level is an array of type batch_size * vocab_len
-  each row of that array needs to be converted back to a character
-  the characters need to be appended by batch_len first, different rows
-  of the batches should be different strings
-  '''
-
-  batch_len = len(batch_data)
-  row, col = batch_data[0].shape
-  row_ptr = 0
-  vocab = 'abcdefghijklmnopqrstuvwxyz'
-  batch_string = []
-
-  while row_ptr < row:
-    string = ''
-    for i in range(batch_len):
-      data = batch_data[i][row_ptr]
-      idx = np.argmax(data)
-      char = id2char(idx,vocab)
-      string += char
-    batch_string.append(string)
-    row_ptr += 1
-
-  return batch_string
+    x = self.batch[:,self.cursor*self.batch_len:(self.cursor+1)*self.batch_len]
+    y = self.batch[:,self.cursor*self.batch_len+1:(self.cursor+1)*self.batch_len+1]
+    self.cursor = (self.cursor + 1)//self.epoch_size
+    return (x,y)
 
 if __name__ == "__main__":
 
@@ -164,10 +114,8 @@ if __name__ == "__main__":
   train, val ,test = train_test_split(data)
 
   batch_train = BatchGenerator(train,64,20)
-
-  # Testing that we are getting batches of appropriate size and shape
-  print batch2String(batch_train.next())
-
+  batch_train.create_batches()
+  print batch_train.next()
 
 
 
