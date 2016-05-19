@@ -1,25 +1,6 @@
 '''
-File containing the model definition for the LSTM
-
-Dropout needs to accomodated. Thus the model definition should know if training or validation or test
-Mutiple layers to be accomodated
-Weight tying across time
-saving variables, re-using variables
-
-How I am breaking down the implementation
-1) Implementation of basic LSTMcell
-   - define using number of hidden states, and bias_offset
-   - takes in data, and previous state
-   - updates internal variables
-   - outputs the hidden unit and state
-   - do not worry about reuse of variables etc, just implement for a single time step
-2) Implementation of a MultiLSTMcell
-   - takes in a cell, and depth variable which specifies how many layers to implement
-   - takes in data and previous state
-   - updates internal variables
-   - returns the final hidden variable, and total cell state
-3) Implementation of embedding and dropout layers
-4) Building upon the LSTMcell, run it on a sequence (based off of LSTM example)
+File containing the model definition for the some of the layers I am recreating from tensorflow
+for my better understanding
 '''
 
 import tensorflow as tf
@@ -80,22 +61,34 @@ class LSTM(object):
 
       return new_h, array_ops.concat(1,[new_c,new_h])
 
+  def zero_state(self, batch_size, dtype):
+    '''
+    return a zero shaped vector (used in initialization schemes)
+    :param batch_size: size of batch
+    :param dtype: data type of the batch
+    :return: a 2D tensor of shape [batch_size x state_size]
+    '''
+    initial_state = array_ops.zeros(array_ops.pack([batch_size, self.state_size]), dtype=dtype)
+    return initial_state
+
 class DeepLSTM(object):
   '''A DeepLSTM unit composed of multiple LSTM units'''
 
-  def __init__(self, cells):
+  def __init__(self, cells, drop_prob=0):
     '''
-    Create a
     :param cell: list of LSTM cells that are to be stacked
+    :param drop_porb: layerwise regularization using dropout
     '''
     self.cells = cells
     self.state_size = sum([cell.state_size for cell in cells])
+    self.drop_prob = drop_prob
 
-  def __call__(self, input_data, state, scope=None):
+  def __call__(self, input_data, state, is_training, scope=None):
     '''
     Go through multiple layers of the cells and return the final output and all the cell states
     :param input_data: data for the current time step
     :param state: previous cell states for all the layers
+    :param is_training: boolean flag capturing whether training is being done or not
     :param scope: scope within which the operation will occur
     :return: new cell states and final output layer
     '''
@@ -111,8 +104,20 @@ class DeepLSTM(object):
           curr_pos += cell.state_size
           # hidden unit is propagated as the input_data
           curr_input, new_state = cell(curr_input,curr_state)
+          if self.drop_prob and is_training:
+            curr_input = dropout(curr_input,self.drop_prob)
           new_states.append(new_state)
       return curr_input, array_ops.concat(1,new_states)
+
+  def zero_state(self, batch_size, dtype):
+    '''
+    return a zero shaped vector (used in initialization schemes)
+    :param batch_size: size of batch
+    :param dtype: data type of the batch
+    :return: a 2D tensor of shape [batch_size x state_size]
+    '''
+    initial_state = array_ops.zeros(array_ops.pack([batch_size, self.state_size]), dtype=dtype)
+    return initial_state
 
 # TODO: Kaushik handle sequences of different lengths, and accomodate dropout
 def fixed_time_steps_LSTM(cell, inputs, initial_state = None, scope = None):
@@ -130,10 +135,20 @@ def fixed_time_steps_LSTM(cell, inputs, initial_state = None, scope = None):
 
     return (outputs, state)
 
+def dropout(x, dropout_prob, seed=None, name=None):
 
-# TODO: Kaushik Add embedding layer
-# TODO: Kaushik Add dropout layer
-# TODO: DeepLSTM with Dropout between layers
+  with tf.variable_scope(name or 'Dropout'):
+    if isinstance(dropout,float) and not 0<dropout_prob<=1:
+      raise ValueError("dropout probability must be a scalar tensor or a value in "
+                       "range (0,1]")
+    x = tf.convert_to_tensor(x)
+    dropout_prob = tf.convert_to_tensor(dropout_prob,dtype=x.dtype)
+    random_tensor = tf.random_uniform(x.get_shape(),minval=0,maxval=1,dtype=x.dtype,seed=seed)
+    binary_tensor = tf.floor(random_tensor+dropout_prob)
+    ret = x * tf.inv(dropout_prob) * binary_tensor
+    ret.set_shape(x.get_shape())
+    return ret
+
 # TODO: DeepLSTM with recurrent batch normalization
 
 

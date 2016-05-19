@@ -1,21 +1,5 @@
 '''
-Goal: To re-create the LSTM char to char model from ground up to understand how
-LSTMs work in Tensorflow, and move onto better code
-
-Aspiration: To submit a multi-variate time series example on Tensorflow
-
-Step 1: Download the data
-Step 2: Convert characters to numbers
-Step 3: Reshape data into batches of shape [batch_size, backprop_len]
-Step 4: Embeddings, sampling from vector, calculation of log probability
-Step 5: LSTM graph
-Step 6: Running on training data
-Step 7: Test data evaluation
-
-Update 1: Dropout
-Update 2: Deep LSTMs
-Update 3: Beam Search
-Update 4: batch normalization
+Functions and classes for reading data
 '''
 
 import numpy as np
@@ -26,22 +10,30 @@ import os
 from six.moves.urllib.request import urlretrieve
 import zipfile
 
-def download_data(url, filename):
+def load_zip_data(filename):
   '''
-  Download a zip file if not present, return the data as unicode strings
-  :param
-  url: url from where to get the data
-  filename: name of file to download
+  return the zip data as unicode strings
+  :param: filename: name of file to open
   :return:
   '''
 
-  if not os.path.exists(filename):
-    filename, _ = urlretrieve(url+filename, filename)
 
   f = zipfile.ZipFile(filename, 'r')
   for name in f.namelist():
     return tf.compat.as_str(f.read(name))
   f.close()
+
+def load_csv_file(filename):
+  '''
+  return data from csv file
+  :param: filename: name of file with location
+  :return:
+  '''
+
+  with open(filename,'r') as f:
+    data = f.read()
+  f.close()
+  return data
 
 def train_test_split(data, ratio =[0.6,0.2,0.2]):
   '''
