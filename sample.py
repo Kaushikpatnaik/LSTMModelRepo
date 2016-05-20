@@ -51,8 +51,6 @@ def sample(sess,model,vocab,chars,init_word='',random=True,num=200):
     [state, prediction] = sess.run([model.final_state, model.output_prob],
                        feed_dict={model.input_layer: x, model.initial_state: state})
 
-
-
 def main():
   raise NotImplementedError
 

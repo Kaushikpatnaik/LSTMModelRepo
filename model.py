@@ -44,6 +44,7 @@ class Model(object):
     self.cell = args.cell
     self.hidden_units = args.hidden_units
     self.data_dim = args.data_dim
+    self.drop_prob = args.drop_prob
 
     # define placeholder for data layer
     self.input_layer = tf.placeholder(tf.int32, [self.batch_size, self.batch_len])
@@ -51,14 +52,14 @@ class Model(object):
     # define weights for data layer (vocab_size to self.hidden_units)
     input_weights = tf.get_variable('input_weights', [self.data_dim, self.hidden_units])
 
-    # define input to LSTM cell
+    # define input to LSTM cell [self.batch_size x self.batch_len x self.hidden_units]
     inputs = tf.nn.embedding_lookup(input_weights, self.input_layer)
 
     # define model based on cell and num_layers
     if self.num_layers ==1:
-      self.lstm_layer = LSTM(self.hidden_units)
+      self.lstm_layer = LSTM(self.hidden_units,self.drop_prob)
     else:
-      cells = [LSTM(self.hidden_units)]*self.num_layers
+      cells = [LSTM(self.hidden_units,self.drop_prob)]*self.num_layers
       self.lstm_layer = DeepLSTM(cells)
 
     outputs = []
@@ -94,7 +95,7 @@ class Model(object):
     self.cost = tf.reduce_sum(loss) / self.batch_size / self.batch_len
     self.final_state = state
 
-    if not is_training or not is_inference:
+    if not is_training and not is_inference:
       return
 
     self.lr = tf.Variable(0.0, trainable=False)

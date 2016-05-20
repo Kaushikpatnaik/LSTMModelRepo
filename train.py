@@ -13,11 +13,12 @@ from model import *
 import tensorflow as tf
 import time
 
-def run_epoch(session, model, data, max_batches, args):
+def run_epoch(session, model, train_op, data, max_batches, args):
   '''
   Run the model under given session for max_batches based on args
   :param model: model on which the operations take place
   :param session: session for tensorflow
+  :param train_op: training output variable name, pass as tf.no_op() for validation and testing
   :param data: train, validation or testing data
   :param max_batches: maximum number of batches that can be called
   :param args: arguments provided by user in main
@@ -34,13 +35,13 @@ def run_epoch(session, model, data, max_batches, args):
 
   for i in range(max_batches):
     x, y = data.next()
-    cur_cost, curr_state, _ = session.run([model.cost,model.final_state,model.train_op],
+    cur_cost, curr_state, _ = session.run([model.cost,model.final_state,train_op],
                 feed_dict={model.input_layer: x, model.targets: y, model.initial_state: state})
     tot_cost += cur_cost
     state = curr_state
     iters += args.batch_len
 
-    if i % (max_batches//20) == 0:
+    if i % (max_batches//5) == 0:
       print 'iteration %.3f perplexity: %.3f speed: %.0f wps' %\
             (i, np.exp(tot_cost/iters), iters*args.batch_size/(time.time()-start_time))
 
@@ -50,26 +51,26 @@ def run_epoch(session, model, data, max_batches, args):
 def main():
   # parse arguments
   parser = argparse.ArgumentParser()
-  parser.add_argument('--filename', type=str, default='text8.zip', help='data location for all data')
-  parser.add_argument('--split_ratio', type =list, default=[0.8,0.1,0.1], help='split ratio for train, validation and test')
-  parser.add_argument('--batch_size', type=int, default=256, help='batch size for data')
-  parser.add_argument('--batch_len', type=int, default=40, help='number of time steps to unroll')
+  parser.add_argument('--filename', type=str, default='./data/tinyshakespeare/input.txt', help='data location for all data')
+  parser.add_argument('--split_ratio', type =list, default=[0.9,0.05,0.05], help='split ratio for train, validation and test')
+  parser.add_argument('--batch_size', type=int, default=50, help='batch size for data')
+  parser.add_argument('--batch_len', type=int, default=20, help='number of time steps to unroll')
   parser.add_argument('--cell', type=str, default='lstm', help='the cell type to use, currently only LSTM')
   parser.add_argument('--num_layers', type=int, default=1, help='depth of hidden units in the model')
-  parser.add_argument('--hidden_units', type=int, default=128, help='number of hidden units in the cell')
-  parser.add_argument('--num_epochs', type=int, default = 20, help='max number of epochs to run the training')
-  parser.add_argument('--lr_rate', type=float, default=0.001, help='learning rate')
+  parser.add_argument('--hidden_units', type=int, default=32, help='number of hidden units in the cell')
+  parser.add_argument('--num_epochs', type=int, default=50, help='max number of epochs to run the training')
+  parser.add_argument('--lr_rate', type=float, default=2e-5, help='learning rate')
   parser.add_argument('--lr_decay', type=float, default=0.97, help='learning rate decay')
-  #parser.add_argument('--optim_func', type=str, default='rmsprop', help='optimization function to be used')
+  parser.add_argument('--drop_prob', type=float, default=0.5, help='optimization function to be used')
   parser.add_argument('--grad_clip', type=float, default=5.0, help='clip gradients at this value')
   #parser.add_argument('--save_every', type=int, default=500, help='save at every batches')
 
   args = parser.parse_args()
 
   # load data
-  if args.filename[-2:] == 'zip':
+  if args.filename[-3:] == 'zip':
     data = load_zip_data(args.filename)
-  elif args.filename[-2:] == 'csv':
+  elif args.filename[-3:] == 'txt':
     data = load_csv_file(args.filename)
   else:
     raise NotImplementedError("File extension not supported")
@@ -90,6 +91,8 @@ def main():
   batch_test.create_batches()
   max_batches_test = batch_test.epoch_size
 
+  print max_batches_train, max_batches_val, max_batches_test
+
   # Initialize session and graph
   with tf.Graph().as_default(), tf.Session() as session:
     initializer = tf.random_uniform_initializer(-0.1,0.1)
@@ -104,18 +107,17 @@ def main():
 
     for i in range(args.num_epochs):
       # TODO: Add parameter for max_max_epochs
-      lr_decay = args.lr_decay ** max(i-5.0,0.0)
+      lr_decay = args.lr_decay ** max(i-10.0,0.0)
       train_model.assign_lr(session, args.lr_rate*lr_decay)
 
       # run a complete epoch and return appropriate variables
-      train_perplexity = run_epoch(session, train_model, batch_train, max_batches_train, args)
+      train_perplexity = run_epoch(session, train_model, train_model.train_op, batch_train, max_batches_train, args)
       print 'Epoch %d, Train Perplexity: %.3f' %(i+1, train_perplexity)
 
-      val_perplexity = run_epoch(session, val_model, batch_val, max_batches_val, args)
+      val_perplexity = run_epoch(session, val_model, tf.no_op(), batch_val, max_batches_val, args)
       print 'Epoch %d, Val Perplexity: %.3f' %(i+1, val_perplexity)
 
-
-    test_perplexity = run_epoch(session, test_model, batch_test, max_batches_test, args)
+    test_perplexity = run_epoch(session, test_model, tf.no_op(), batch_test, max_batches_test, args)
     print 'Test Perplexity: %.3f' % test_perplexity
 
 if __name__ == "__main__":

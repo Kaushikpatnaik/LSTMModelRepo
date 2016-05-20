@@ -10,22 +10,25 @@ from tensorflow.python.ops import array_ops
 class LSTM(object):
   '''A single LSTM unit with one hidden layer'''
 
-  def __init__(self,hidden_units,offset_bias=1.0):
+  def __init__(self,hidden_units,drop_prob=0.0,offset_bias=1.0):
     '''
     Initialize the LSTM with given number of hidden layers and the offset bias
     :param hidden_units: number of hidden cells in the LSTM
     :param offset_bias: the bias is usually kept as 1.0 initially for ?? TODO: find out reason
+    :param drop_prob: dropout probability
     '''
 
     self.hidden_units = hidden_units
     self.offset_bias = offset_bias
+    self.drop_prob = drop_prob
     self.state_size = 2*self.hidden_units
 
-  def __call__(self, input_data, state, scope=None):
+  def __call__(self, input_data, state, is_training, scope=None):
     '''
     Take in input_data and update the hidden unit and the cell state
     :param input_data: data for the current time step
     :param state: previous cell state
+    :param is_training: flag capturing weather it is training or not for dropout
     :param scope: scope within which the variables exist
     :return: new cell state and output concated
     '''
@@ -58,6 +61,8 @@ class LSTM(object):
 
       new_c = c*tf.sigmoid(forget_gate + self.offset_bias) + tf.sigmoid(ip_transform)*tf.tanh(ip_gate)
       new_h = tf.tanh(new_c)*tf.sigmoid(output_gate)
+      if is_training and (0 < self.drop_prob <= 1):
+        new_h = dropout(new_h,self.drop_prob)
 
       return new_h, array_ops.concat(1,[new_c,new_h])
 
@@ -74,14 +79,14 @@ class LSTM(object):
 class DeepLSTM(object):
   '''A DeepLSTM unit composed of multiple LSTM units'''
 
-  def __init__(self, cells, drop_prob=0):
+  def __init__(self, cells):
     '''
     :param cell: list of LSTM cells that are to be stacked
     :param drop_porb: layerwise regularization using dropout
     '''
     self.cells = cells
     self.state_size = sum([cell.state_size for cell in cells])
-    self.drop_prob = drop_prob
+    self.drop_prob = cells[0].drop_prob
 
   def __call__(self, input_data, state, is_training, scope=None):
     '''
@@ -103,9 +108,7 @@ class DeepLSTM(object):
           curr_state = array_ops.slice(state,[0,curr_pos],[-1,cell.state_size])
           curr_pos += cell.state_size
           # hidden unit is propagated as the input_data
-          curr_input, new_state = cell(curr_input,curr_state)
-          if self.drop_prob and is_training:
-            curr_input = dropout(curr_input,self.drop_prob)
+          curr_input, new_state = cell(curr_input,curr_state,is_training)
           new_states.append(new_state)
       return curr_input, array_ops.concat(1,new_states)
 
