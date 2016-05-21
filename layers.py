@@ -122,22 +122,6 @@ class DeepLSTM(object):
     initial_state = array_ops.zeros(array_ops.pack([batch_size, self.state_size]), dtype=dtype)
     return initial_state
 
-# TODO: Kaushik handle sequences of different lengths, and accomodate dropout
-def fixed_time_steps_LSTM(cell, inputs, initial_state = None, scope = None):
-  '''Run a LSTM or DeepLSTM for multiple time steps (prefixed)'''
-
-  with tf.variable_scope(scope or "RNN"):
-    if initial_state is not None:
-      state = initial_state
-
-    outputs = []
-    for time, input in enumerate(inputs):
-      if time > 0: tf.get_variable_scope().reuse_variables()
-      output, state = cell(input, state)
-      outputs.append(output)
-
-    return (outputs, state)
-
 def dropout(x, dropout_prob, seed=None, name=None):
 
   with tf.variable_scope(name or 'Dropout'):

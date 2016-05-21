@@ -28,7 +28,7 @@ def run_epoch(session, model, train_op, data, max_batches, args):
   # to run a session you need the list of tensors/graph nodes and the feed dict
   # for us its the cost, final_state, and optimizer
   # you feed in the (x,y) pairs, and you also propagate the state across the batches
-  state = model.initial_state.eval()
+  state = np.zeros((args.batch_size,model.lstm_layer.state_size))
   tot_cost = 0.0
   start_time = time.time()
   iters = 0
@@ -41,7 +41,7 @@ def run_epoch(session, model, train_op, data, max_batches, args):
     state = curr_state
     iters += args.batch_len
 
-    if i % (max_batches//5) == 0:
+    if i % (max_batches//50) == 0:
       print 'iteration %.3f perplexity: %.3f speed: %.0f wps' %\
             (i, np.exp(tot_cost/iters), iters*args.batch_size/(time.time()-start_time))
 
@@ -53,17 +53,17 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('--filename', type=str, default='./data/tinyshakespeare/input.txt', help='data location for all data')
   parser.add_argument('--split_ratio', type =list, default=[0.9,0.05,0.05], help='split ratio for train, validation and test')
-  parser.add_argument('--batch_size', type=int, default=50, help='batch size for data')
-  parser.add_argument('--batch_len', type=int, default=20, help='number of time steps to unroll')
+  parser.add_argument('--batch_size', type=int, default=1, help='batch size for data')
+  parser.add_argument('--batch_len', type=int, default=1, help='number of time steps to unroll')
   parser.add_argument('--cell', type=str, default='lstm', help='the cell type to use, currently only LSTM')
   parser.add_argument('--num_layers', type=int, default=1, help='depth of hidden units in the model')
   parser.add_argument('--hidden_units', type=int, default=32, help='number of hidden units in the cell')
   parser.add_argument('--num_epochs', type=int, default=50, help='max number of epochs to run the training')
   parser.add_argument('--lr_rate', type=float, default=2e-5, help='learning rate')
   parser.add_argument('--lr_decay', type=float, default=0.97, help='learning rate decay')
-  parser.add_argument('--drop_prob', type=float, default=0.5, help='optimization function to be used')
+  parser.add_argument('--drop_prob', type=float, default=0, help='optimization function to be used')
   parser.add_argument('--grad_clip', type=float, default=5.0, help='clip gradients at this value')
-  #parser.add_argument('--save_every', type=int, default=500, help='save at every batches')
+  parser.add_argument('--stateful', type=bool, default=True, help='save at every batches')
 
   args = parser.parse_args()
 

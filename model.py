@@ -31,6 +31,7 @@ def sequence_loss_by_example(logits, targets, weights, average_across_time=True,
       final_loss = sequence_loss
     return final_loss
 
+
 class Model(object):
   '''Class defining the overall model based on layers.py'''
   # TODO: passing multiple flags to the model initiliazation seems hacky, better design or maybe a feedforward function
@@ -45,6 +46,8 @@ class Model(object):
     self.hidden_units = args.hidden_units
     self.data_dim = args.data_dim
     self.drop_prob = args.drop_prob
+    self.is_training = is_training
+    self.is_inference = is_inference
 
     # define placeholder for data layer
     self.input_layer = tf.placeholder(tf.int32, [self.batch_size, self.batch_len])
@@ -64,14 +67,15 @@ class Model(object):
 
     outputs = []
     # keep the initial_state accessible (as this will be used for initialization) and state resets with epochs
-    self.initial_state = self.lstm_layer.zero_state(self.batch_size,tf.float32)
+    #self.initial_state = self.lstm_layer.zero_state(self.batch_size,tf.float32)
+    self.initial_state = tf.placeholder(tf.float32,[self.batch_size, self.lstm_layer.state_size])
     state = self.initial_state
     # run the model for multiple time steps
     with tf.variable_scope("RNN"):
       for time in range(self.batch_len):
         if time > 0: tf.get_variable_scope().reuse_variables()
         # pass the inputs, state and weather we are in train/test or inference time (for dropout)
-        output, state = self.lstm_layer(inputs[:,time,:], state, (is_training or is_inference))
+        output, state = self.lstm_layer(inputs[:,time,:], state, (self.is_training or self.is_inference))
         outputs.append(output)
 
     # for each single input collect the hidden units, then reshape as [self.batch_len x self.batch_size x self.hidden_units]
@@ -95,7 +99,7 @@ class Model(object):
     self.cost = tf.reduce_sum(loss) / self.batch_size / self.batch_len
     self.final_state = state
 
-    if not is_training and not is_inference:
+    if not self.is_training and not self.is_inference:
       return
 
     self.lr = tf.Variable(0.0, trainable=False)
@@ -108,8 +112,6 @@ class Model(object):
   def assign_lr(self,session,lr_value):
     session.run(tf.assign(self.lr, lr_value))
 
-  def inference(self):
-    raise NotImplementedError
 
 
 
